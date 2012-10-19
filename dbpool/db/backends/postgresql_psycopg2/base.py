@@ -12,6 +12,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def dot_import(name):
+    from django.utils.importlib import import_module
+    try:
+        dot = name.rindex('.')
+    except ValueError:
+        raise ValueError("Malformed import string: %s" % name)
+
+    mname, fname = name[:dot], name[dot+1:]
+    mod = import_module(mname)
+    return getattr(mod, fname)
+
 class PooledConnection():
     '''
     Thin wrapper around a psycopg2 connection to handle connection pooling.
@@ -79,6 +90,7 @@ class DatabaseWrapper14(OriginalDatabaseWrapper):
                 }
                 max_conns = settings_dict['OPTIONS'].pop('MAX_CONNS', 1)
                 min_conns = settings_dict['OPTIONS'].pop('MIN_CONNS', max_conns)
+                pool_type = settings_dict['OPTIONS'].pop('POOL_TYPE', 'psycopg2.pool.ThreadedConnectionPool')
                 conn_params.update(settings_dict['OPTIONS'])
                 if 'autocommit' in conn_params:
                     del conn_params['autocommit']
@@ -95,9 +107,9 @@ class DatabaseWrapper14(OriginalDatabaseWrapper):
                 try:
                     logger.debug("Creating connection pool for db alias %s" % self.alias)
 
-                    from psycopg2 import pool
+                    pool_cls = dot_import(pool_type)
                     connection_pools[self.alias] = {
-                        'pool': pool.ThreadedConnectionPool(min_conns, max_conns, **conn_params),
+                        'pool': pool_cls(min_conns, max_conns, **conn_params),
                         'settings': dict(settings_dict),
                     }
                 finally:
@@ -162,6 +174,7 @@ class DatabaseWrapper13(OriginalDatabaseWrapper):
                 }
                 max_conns = settings_dict['OPTIONS'].pop('MAX_CONNS', 1)
                 min_conns = settings_dict['OPTIONS'].pop('MIN_CONNS', max_conns)
+                pool_type = settings_dict['OPTIONS'].pop('POOL_TYPE', 'psycopg2.pool.ThreadedConnectionPool')
                 conn_params.update(settings_dict['OPTIONS'])
                 if 'autocommit' in conn_params:
                     del conn_params['autocommit']
@@ -178,9 +191,9 @@ class DatabaseWrapper13(OriginalDatabaseWrapper):
                 try:
                     logger.debug("Creating connection pool for db alias %s" % self.alias)
 
-                    from psycopg2 import pool
+                    pool_cls = dot_import(pool_type)
                     connection_pools[self.alias] = {
-                        'pool': pool.ThreadedConnectionPool(min_conns, max_conns, **conn_params),
+                        'pool': pool_cls(min_conns, max_conns, **conn_params),
                         'settings': dict(settings_dict),
                     }
                 finally:
