@@ -141,6 +141,9 @@ class DatabaseWrapper14(OriginalDatabaseWrapper):
         cursor.tzinfo_factory = utc_tzinfo_factory if settings.USE_TZ else None
         return CursorWrapper(cursor)
 
+    def closeall(self):
+        for connection in connection_pools.values():
+            connection['pool'].closeall()
 
 class DatabaseWrapper13(OriginalDatabaseWrapper):
     '''
@@ -226,6 +229,10 @@ class DatabaseWrapper13(OriginalDatabaseWrapper):
                     # do without breaking other things (#10509).
                     self.features.can_return_id_from_insert = True
         return CursorWrapper(cursor)
+
+    def closeall(self):
+        for connection in connection_pools.values():
+            connection['pool'].closeall()
 
 '''
 Choose a version of the DatabaseWrapper class to use based on the Django
