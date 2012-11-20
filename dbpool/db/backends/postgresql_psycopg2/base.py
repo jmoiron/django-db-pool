@@ -145,6 +145,22 @@ class DatabaseWrapper14(OriginalDatabaseWrapper):
         for connection in connection_pools.values():
             connection['pool'].closeall()
 
+def warmup(alias='default', _registry=[]):
+    if alias in _registry:
+        return
+    _registry.append(alias)
+
+    from django.db import connections
+    from django.conf import settings
+    opts = settings.DATABASES[alias].get('OPTIONS', {})
+    max_conns = opts.get('MAX_CONNS', 1)
+
+    for _ in range(max_conns):
+        cursor = connections[alias].cursor()
+        cursor.execute('SELECT NOW() AS warmup')
+        cursor.fetchall()
+        cursor.close()
+
 class DatabaseWrapper13(OriginalDatabaseWrapper):
     '''
     For Django 1.3.x
