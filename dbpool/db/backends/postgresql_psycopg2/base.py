@@ -161,6 +161,10 @@ def warmup(alias='default', _registry=[]):
         cursor.fetchall()
         cursor.close()
 
+    # returns the connection to the pool
+    for _ in range(max_conns):
+        connections[alias].close()
+
 class DatabaseWrapper13(OriginalDatabaseWrapper):
     '''
     For Django 1.3.x
