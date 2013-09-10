@@ -1,8 +1,8 @@
 Django DB Pool
 =============
 
-**Note that this code has not been rigorously tested in high-volume production systems!  You should perform your own
-load / concurrency tests prior to any deployment.  And of course, patches are highly appreciated.**
+This is a fork of @gmcguire's django-db-pool which is current with MASTER but has
+the gevent pool patches from @cinghiale.
 
 Another connection pool "solution"?
 -----------------------------------
