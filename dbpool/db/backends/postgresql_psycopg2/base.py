@@ -388,3 +388,4 @@ elif django_version.startswith('1.6'):
         pass
 else:
     raise ImportError("Unsupported Django version %s" % django_version)
+
