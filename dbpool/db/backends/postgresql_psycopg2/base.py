@@ -8,6 +8,7 @@ from django.db.backends.postgresql_psycopg2.base import \
     DatabaseWrapper as OriginalDatabaseWrapper
 from django.db.backends.signals import connection_created
 from threading import Lock
+import time
 import logging
 import sys
 
@@ -44,7 +45,11 @@ class PooledConnection():
             num_attempts = 0
             while self._wrapped_connection is None:
                 num_attempts += 1;
-                c = pool.getconn()
+                try:
+                    c = pool.getconn()
+                except:
+                    time.sleep(0.02)
+                    continue
                 try:
                     c.cursor().execute(test_query)
                 except Database.Error:
@@ -60,7 +65,12 @@ class PooledConnection():
                         c.rollback()
                     self._wrapped_connection = c
         else:
-            self._wrapped_connection = pool.getconn()
+            self._wrapped_connection = None
+            while self._wrapped_connection is None:
+                try:
+                    self._wrapped_connection = pool.getconn()
+                except:
+                    time.sleep(0.02)
 
         logger.debug("Checked out connection %s from pool %s" % (self._wrapped_connection, self._pool))
 
@@ -90,24 +100,21 @@ pool_config_defaults = {
     'MIN_CONNS': None,
     'MAX_CONNS': 1,
     'TEST_ON_BORROW': False,
-    'TEST_ON_BORROW_QUERY': 'SELECT 1'
+    'TEST_ON_BORROW_QUERY': 'SELECT 1',
+    'USE_GEVENT': False,
 }
 
 def _set_up_pool_config(self):
     '''
     Helper to configure pool options during DatabaseWrapper initialization.
     '''
-    self._max_conns = self.settings_dict['OPTIONS'].get('MAX_CONNS', pool_config_defaults['MAX_CONNS'])
-    self._min_conns = self.settings_dict['OPTIONS'].get('MIN_CONNS', self._max_conns)
-
-    self._test_on_borrow = self.settings_dict["OPTIONS"].get('TEST_ON_BORROW',
-                                                             pool_config_defaults['TEST_ON_BORROW'])
-    if self._test_on_borrow:
-        self._test_on_borrow_query = self.settings_dict["OPTIONS"].get('TEST_ON_BORROW_QUERY',
-                                                                       pool_config_defaults['TEST_ON_BORROW_QUERY'])
-    else:
-        self._test_on_borrow_query = None
-
+    opts = dict(pool_config_defaults)
+    opts.update(self.settings_dict['OPTIONS'])
+    self._max_conns = opts['MAX_CONNS']
+    self._min_conns = opts['MIN_CONNS'] or opts['MAX_CONNS']
+    self._test_on_borrow = opts['TEST_ON_BORROW']
+    self._test_on_borrow_query = None if not opts['TEST_ON_BORROW'] else opts['TEST_ON_BORROW_QUERY']
+    self._use_gevent = opts['USE_GEVENT']
 
 def _create_connection_pool(self, conn_params):
     '''
@@ -124,9 +131,13 @@ def _create_connection_pool(self, conn_params):
                                                                                          self._max_conns,
                                                                                          self._test_on_borrow))
 
-            from psycopg2 import pool
+            if self._use_gevent:
+                from gevent_pool import GeventConnectionPool as ConnectionPool
+            else:
+                from psycopg2.pool import ThreadedConnectionPool as ConnectionPool
+
             connection_pools[self.alias] = {
-                'pool': pool.ThreadedConnectionPool(self._min_conns, self._max_conns, **conn_params),
+                'pool': ConnectionPool(self._min_conns, self._max_conns, **conn_params),
                 'settings': dict(self.settings_dict),
             }
     finally:
@@ -152,7 +163,11 @@ your app server.
 If you wish to validate connections on each check out, specify TEST_ON_BORROW (set to True)
 in the OPTIONS dictionary for the given db entry.  You can also provide an optional
 TEST_ON_BORROW_QUERY, which is "SELECT 1" by default.
+
+If you are using gevent and you want to use a pool tailored to gevent use, set
+USE_GEVENT to True.
 '''
+
 class DatabaseWrapper16(OriginalDatabaseWrapper):
     '''
     For Django 1.6.x
